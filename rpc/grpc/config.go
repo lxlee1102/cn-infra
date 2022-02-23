@@ -21,9 +21,11 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/namsral/flag"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 
 	"go.ligato.io/cn-infra/v2/config"
 	"go.ligato.io/cn-infra/v2/infra"
@@ -68,6 +70,15 @@ type Config struct {
 	// Compression for inbound/outbound messages.
 	// Supported only gzip.
 	//TODO Compression string
+
+	// see keepalive.go
+	KeepaliveEnable              bool   `json:"keepalive-enable"`
+	KeepaliveClientPingMinTime   uint32 `json:"keepalive-client-ping-min-interval"`
+	KeepalivePermitWithoutStream bool   `json:"keepalive-permit-without-stream"`
+	KeepaliveIdlePingInterval    uint32 `json:"keepalive-idle-ping-interval"`
+	KeepalivePingTimeout         uint32 `json:"keepalive-ping-timeout"`
+	KeepaliveMaxConnectionAge    uint32 `json:"keepalive-max-connection-age"`
+	KeepaliveMaxConnectionIdle   uint32 `json:"keepalive-max-connection-idle"`
 }
 
 func (cfg *Config) getGrpcOptions() (opts []grpc.ServerOption) {
@@ -77,6 +88,40 @@ func (cfg *Config) getGrpcOptions() (opts []grpc.ServerOption) {
 	if cfg.MaxMsgSize > 0 {
 		opts = append(opts, grpc.MaxRecvMsgSize(cfg.MaxMsgSize))
 	}
+
+	if cfg.KeepaliveEnable {
+		kaep := keepalive.EnforcementPolicy{
+			MinTime:             20 * time.Second,
+			PermitWithoutStream: false,
+		}
+		kasp := keepalive.ServerParameters{
+			Time:    7200 * time.Second,
+			Timeout: 20 * time.Second,
+		}
+
+		if cfg.KeepaliveClientPingMinTime > 0 {
+			kaep.MinTime = time.Duration(cfg.KeepaliveClientPingMinTime) * time.Second
+		}
+		if cfg.KeepalivePermitWithoutStream {
+			kaep.PermitWithoutStream = cfg.KeepalivePermitWithoutStream
+		}
+
+		if cfg.KeepalivePingTimeout > 0 {
+			kasp.Timeout = time.Duration(cfg.KeepalivePingTimeout) * time.Second
+		}
+		if cfg.KeepaliveIdlePingInterval > 0 {
+			kasp.Time = time.Duration(cfg.KeepaliveIdlePingInterval) * time.Second
+		}
+		if cfg.KeepaliveMaxConnectionAge > 0 {
+			kasp.MaxConnectionAge = time.Duration(cfg.KeepaliveMaxConnectionAge) * time.Second
+		}
+		if cfg.KeepaliveMaxConnectionIdle > 0 {
+			kasp.MaxConnectionIdle = time.Duration(cfg.KeepaliveMaxConnectionIdle) * time.Second
+		}
+
+		opts = append(opts, grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp))
+	}
+
 	return
 }
 

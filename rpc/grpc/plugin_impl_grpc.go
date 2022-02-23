@@ -123,6 +123,10 @@ func (p *Plugin) Init() (err error) {
 			grpc_middleware.WithStreamServerChain(streamChain...),
 		)
 
+		if p.Config.KeepaliveEnable {
+			p.Log.Info("KeepAlive gRPC enabled")
+		}
+
 		// add custom server options
 		opts = append(opts, p.serverOpts...)
 
